@@ -1,59 +1,46 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Image Downloader</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 40px;
-      max-width: 600px;
-      margin: auto;
-    }
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      font-size: 16px;
-    }
-    #responseMsg {
-      margin-top: 20px;
-      font-weight: bold;
-    }
+    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
+    input, button { width: 100%; padding: 10px; margin: 8px 0; }
+    .result { margin-top: 20px; }
   </style>
 </head>
 <body>
-  <h1>🖼️ Website Image Downloader</h1>
+  <h2>🌐 Website Image Downloader</h2>
   <form id="downloadForm">
-    <input type="text" id="url" placeholder="Enter Website URL" required />
-    <input type="text" id="folder" placeholder="Enter Folder Name (e.g., cats)" />
+    <input type="text" id="url" placeholder="Enter website URL" required />
+    <input type="text" id="folder" placeholder="Enter folder name (e.g., cats)" />
     <button type="submit">Download Images</button>
   </form>
-  <p id="responseMsg"></p>
+
+  <div class="result" id="result"></div>
 
   <script>
-    document.getElementById("downloadForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const url = document.getElementById("url").value;
-      let folder = document.getElementById("folder").value;
-      if (!folder) folder = "default";
+    const form = document.getElementById("downloadForm");
+    const result = document.getElementById("result");
 
-      const response = await fetch("/download", {
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      result.innerHTML = "⏳ Downloading images...";
+      
+      const url = document.getElementById("url").value;
+      const folder = document.getElementById("folder").value;
+
+      const res = await fetch("/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, folder })
       });
 
-      const data = await response.json();
-      const msg = document.getElementById("responseMsg");
-      msg.innerText = data.message;
+      const data = await res.json();
+      result.innerHTML = data.message;
 
-      if (data.success) {
-        const link = document.createElement("a");
-        link.href = `/downloads/${folder}/`;
-        link.innerText = "📂 View Downloaded Images";
-        link.target = "_blank";
-        msg.appendChild(document.createElement("br"));
-        msg.appendChild(link);
+      if (data.viewLink) {
+        result.innerHTML += `<br><a href="${data.viewLink}" target="_blank">📂 View Downloaded Images</a>`;
       }
     });
   </script>

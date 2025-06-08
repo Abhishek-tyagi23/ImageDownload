@@ -8,30 +8,31 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "templates")));
 
-// Serve downloads folder so user can see images
-app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
+// Serve downloaded images
+app.use("/downloads", express.static(path.join(__dirname, "downloads")));
 
-// Home Page
 app.get("/", (req, res) => {
   const filePath = path.join(__dirname, "templates", "index.html");
   res.sendFile(filePath);
 });
 
-// Download Images Route
 app.post("/download", async (req, res) => {
   const websiteURL = req.body.url;
-  let folder = req.body.folder || "default";
-
-  const tmpFolder = path.join(__dirname, "downloads", folder);
+  const folder = req.body.folder || "default";
 
   if (!websiteURL) {
-    return res.json({ message: "❌ Website URL is required.", success: false });
+    return res.json({ message: "❌ Website URL is required." });
   }
 
-  try {
-    await fs.ensureDir(tmpFolder);
+  const downloadPath = path.join(__dirname, "downloads", folder);
+  await fs.ensureDir(downloadPath);
 
-    const browser = await puppeteer.launch({ headless: "new" });
+  try {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
     const page = await browser.newPage();
     await page.goto(websiteURL, { waitUntil: "networkidle2" });
 
@@ -39,20 +40,50 @@ app.post("/download", async (req, res) => {
       imgs.map(i => i.src).filter(Boolean)
     );
 
+    const iconLinks = await page.$$eval("link[rel~='icon']", links =>
+      links.map(l => l.href).filter(Boolean)
+    );
+
+    const bgInline = await page.$$eval("*", els =>
+      els.map(el => {
+        const bg = el.style?.backgroundImage || "";
+        const match = bg.match(/url\(["']?(.*?)["']?\)/);
+        return match ? match[1] : null;
+      }).filter(Boolean)
+    );
+
+    const bgComputed = await page.evaluate(() => {
+      const urls = new Set();
+      document.querySelectorAll("*").forEach(el => {
+        const style = getComputedStyle(el);
+        const bg = style.getPropertyValue("background-image");
+        const match = bg.match(/url\(["']?(.*?)["']?\)/);
+        if (match) urls.add(match[1]);
+      });
+      return Array.from(urls);
+    });
+
+    const allLinks = [...imgLinks, ...iconLinks, ...bgInline, ...bgComputed]
+      .map(link => {
+        if (link.startsWith("//")) return "https:" + link;
+        if (link.startsWith("/")) return websiteURL + link;
+        return link;
+      })
+      .filter(link => link.startsWith("http"));
+
     let index = 1;
-    for (const link of imgLinks) {
-      await downloadImage(link, tmpFolder, index++);
+    for (const link of allLinks) {
+      await downloadImage(link, downloadPath, index++);
     }
 
     await browser.close();
     res.json({
-      message: `✅ Downloaded ${index - 1} images to folder: ${folder}`,
-      success: true,
-      folder
+      message: `✅ Downloaded ${index - 1} images.`,
+      viewLink: `/downloads/${folder}/`
     });
   } catch (err) {
     console.error(err);
-    res.json({ message: "❌ Failed to download images.", success: false });
+    res.json({ message: "❌ Failed to download images." });
   }
 });
 
