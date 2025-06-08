@@ -3,6 +3,20 @@ const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
 
+const express = require("express");
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Hello from Node.js on Vercel!");
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
+
+
+
+
+
 const downloadImage = async (url, folder, index) => {
   try {
     const res = await axios.get(url, {
