@@ -15,19 +15,21 @@ app.get("/", (req, res) => {
 
 app.post("/download", async (req, res) => {
   const websiteURL = req.body.url;
-  const folder = req.body.folder;
+  const folder = req.body.folder || "images";
 
-  if (!websiteURL || !folder) {
-    return res.json({ message: "❌ Website URL and folder path are required." });
+  if (!websiteURL) {
+    return res.status(400).json({ message: "❌ Website URL is required." });
   }
 
   try {
-    await fs.ensureDir(folder);
+    const tmpFolder = path.join("/tmp", folder);
+    await fs.ensureDir(tmpFolder);
 
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
     await page.goto(websiteURL, { waitUntil: "networkidle2" });
 
+    // Get image links
     const imgLinks = await page.$$eval("img", imgs =>
       imgs.map(i => i.src).filter(Boolean)
     );
@@ -64,15 +66,21 @@ app.post("/download", async (req, res) => {
       .filter(link => link.startsWith("http"));
 
     let index = 1;
+    const downloadedFiles = [];
     for (const link of allLinks) {
-      await downloadImage(link, folder, index++);
+      const fileName = await downloadImage(link, tmpFolder, index++);
+      if (fileName) downloadedFiles.push(fileName);
     }
 
     await browser.close();
-    res.json({ message: `✅ Downloaded ${index - 1} images.` });
+
+    res.json({ 
+      message: `✅ Downloaded ${downloadedFiles.length} images to /tmp/${folder}`,
+      files: downloadedFiles
+    });
   } catch (err) {
     console.error(err);
-    res.json({ message: "❌ Failed to download images." });
+    res.status(500).json({ message: "❌ Failed to download images." });
   }
 });
 
@@ -80,11 +88,11 @@ const downloadImage = async (url, folder, index) => {
   try {
     const res = await axios.get(url, {
       responseType: "stream",
-      headers: { "User-Agent": "Mozilla/5.0" }
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
 
     const contentType = res.headers["content-type"];
-    if (!contentType.startsWith("image/")) return;
+    if (!contentType.startsWith("image/")) return null;
 
     let ext = contentType.split("/")[1].split(";")[0];
     if (ext === "svg+xml") ext = "svg";
@@ -101,8 +109,10 @@ const downloadImage = async (url, folder, index) => {
     });
 
     console.log(`✅ Downloaded: ${fileName}`);
+    return fileName;
   } catch (err) {
     console.log(`❌ Failed: ${url}`);
+    return null;
   }
 };
 

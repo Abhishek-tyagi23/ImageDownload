@@ -2,39 +2,76 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Image Downloader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #f0f0f0;
+      border-radius: 8px;
+    }
+    input, button {
+      padding: 0.5rem;
+      margin: 0.5rem 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button {
+      background: #0070f3;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button:hover {
+      background: #005bb5;
+    }
+    #message {
+      margin-top: 1rem;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
-<body >
-  <h1>🖼️ Image Downloader</h1>
-  <form id="urlForm">
-    <label for="website">Enter Website URL:</label><br />
-    <input type="text" id="website" name="website" required><br /><br />
-    
-    <label for="folder">Enter Folder Path:</label><br />
-    <input type="text" id="folder" name="folder" required><br /><br />
-    
+<body>
+  <h1>Image Downloader</h1>
+  <form id="downloadForm">
+    <input type="url" id="url" placeholder="Enter Website URL" required />
+    <input type="text" id="folder" placeholder="Folder Name (optional)" />
     <button type="submit">Download Images</button>
   </form>
-
-  <p id="status"></p>
+  <pre id="message"></pre>
 
   <script>
-    document.getElementById("urlForm").addEventListener("submit", async (e) => {
+    const form = document.getElementById("downloadForm");
+    const messageEl = document.getElementById("message");
+
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const url = document.getElementById("website").value;
-      const folder = document.getElementById("folder").value;
 
-      document.getElementById("status").textContent = "Downloading images...";
+      const url = document.getElementById("url").value.trim();
+      const folder = document.getElementById("folder").value.trim();
 
-      const response = await fetch("/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, folder })
-      });
+      messageEl.textContent = "Downloading... please wait";
 
-      const result = await response.json();
-      document.getElementById("status").textContent = result.message;
+      try {
+        const res = await fetch("/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, folder }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          messageEl.textContent = data.message + "\n\nFiles:\n" + data.files.join("\n");
+        } else {
+          messageEl.textContent = "Error: " + data.message;
+        }
+      } catch (err) {
+        messageEl.textContent = "Request failed.";
+      }
     });
   </script>
 </body>
