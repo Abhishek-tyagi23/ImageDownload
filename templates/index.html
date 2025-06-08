@@ -1,76 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
   <title>Image Downloader</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: sans-serif;
+      padding: 40px;
       max-width: 600px;
-      margin: 2rem auto;
-      padding: 1rem;
-      background: #f0f0f0;
-      border-radius: 8px;
+      margin: auto;
     }
     input, button {
-      padding: 0.5rem;
-      margin: 0.5rem 0;
       width: 100%;
-      box-sizing: border-box;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
     }
-    button {
-      background: #0070f3;
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 1rem;
-    }
-    button:hover {
-      background: #005bb5;
-    }
-    #message {
-      margin-top: 1rem;
-      white-space: pre-wrap;
+    #responseMsg {
+      margin-top: 20px;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <h1>Image Downloader</h1>
+  <h1>🖼️ Website Image Downloader</h1>
   <form id="downloadForm">
-    <input type="url" id="url" placeholder="Enter Website URL" required />
-    <input type="text" id="folder" placeholder="Folder Name (optional)" />
+    <input type="text" id="url" placeholder="Enter Website URL" required />
+    <input type="text" id="folder" placeholder="Enter Folder Name (e.g., cats)" />
     <button type="submit">Download Images</button>
   </form>
-  <pre id="message"></pre>
+  <p id="responseMsg"></p>
 
   <script>
-    const form = document.getElementById("downloadForm");
-    const messageEl = document.getElementById("message");
-
-    form.addEventListener("submit", async (e) => {
+    document.getElementById("downloadForm").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const url = document.getElementById("url").value;
+      let folder = document.getElementById("folder").value;
+      if (!folder) folder = "default";
 
-      const url = document.getElementById("url").value.trim();
-      const folder = document.getElementById("folder").value.trim();
+      const response = await fetch("/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, folder })
+      });
 
-      messageEl.textContent = "Downloading... please wait";
+      const data = await response.json();
+      const msg = document.getElementById("responseMsg");
+      msg.innerText = data.message;
 
-      try {
-        const res = await fetch("/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, folder }),
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-          messageEl.textContent = data.message + "\n\nFiles:\n" + data.files.join("\n");
-        } else {
-          messageEl.textContent = "Error: " + data.message;
-        }
-      } catch (err) {
-        messageEl.textContent = "Request failed.";
+      if (data.success) {
+        const link = document.createElement("a");
+        link.href = `/downloads/${folder}/`;
+        link.innerText = "📂 View Downloaded Images";
+        link.target = "_blank";
+        msg.appendChild(document.createElement("br"));
+        msg.appendChild(link);
       }
     });
   </script>
