@@ -1,33 +1,87 @@
+const express = require("express");
 const puppeteer = require("puppeteer");
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
 
-const express = require("express");
 const app = express();
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'templates')));
 
 app.get("/", (req, res) => {
   const filePath = path.join(__dirname, 'templates', 'index.html');
-
-   res.sendFile(filePath);
+  res.sendFile(filePath);
 });
 
+app.post("/download", async (req, res) => {
+  const websiteURL = req.body.url;
+  const folder = path.join(__dirname, "img");
 
+  try {
+    await fs.ensureDir(folder);
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto(websiteURL, { waitUntil: "networkidle2" });
 
+    const imgLinks = await page.$$eval("img", imgs =>
+      imgs.map(i => i.src).filter(Boolean)
+    );
 
+    const iconLinks = await page.$$eval("link[rel~='icon']", links =>
+      links.map(l => l.href).filter(Boolean)
+    );
 
+    const bgInline = await page.$$eval("*", els =>
+      els.map(el => {
+        const bg = el.style?.backgroundImage || "";
+        const match = bg.match(/url\(["']?(.*?)["']?\)/);
+        return match ? match[1] : null;
+      }).filter(Boolean)
+    );
 
+    const bgComputed = await page.evaluate(() => {
+      const urls = new Set();
+      document.querySelectorAll("*").forEach(el => {
+        const style = getComputedStyle(el);
+        const bg = style.getPropertyValue("background-image");
+        const match = bg.match(/url\(["']?(.*?)["']?\)/);
+        if (match) urls.add(match[1]);
+      });
+      return Array.from(urls);
+    });
+
+    const allLinks = [
+      ...imgLinks,
+      ...iconLinks,
+      ...bgInline,
+      ...bgComputed
+    ]
+      .map(link => {
+        if (link.startsWith("//")) return "https:" + link;
+        if (link.startsWith("/")) return websiteURL + link;
+        return link;
+      })
+      .filter(link => link.startsWith("http"));
+
+    let index = 1;
+    for (const link of allLinks) {
+      await downloadImage(link, folder, index++);
+    }
+
+    await browser.close();
+    res.json({ message: `✅ Downloaded ${index - 1} images.` });
+  } catch (err) {
+    console.error(err);
+    res.json({ message: "❌ Failed to download images." });
+  }
+});
 
 const downloadImage = async (url, folder, index) => {
   try {
     const res = await axios.get(url, {
       responseType: "stream",
-      headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
+      headers: { "User-Agent": "Mozilla/5.0" }
     });
 
     const contentType = res.headers["content-type"];
@@ -53,68 +107,5 @@ const downloadImage = async (url, folder, index) => {
   }
 };
 
-(async () => {
-  const websiteURL = "https://usaplumbingandair.com/";
-  const folder = "E://Study//Video Download//image-downloader//img";
-  await fs.ensureDir(folder);
-
-  const browser = await puppeteer.launch({ headless: true });
-  const page = await browser.newPage();
-  await page.goto(websiteURL, { waitUntil: "networkidle2" });
-
-
-  const imgLinks = await page.$$eval("img", imgs =>
-    imgs.map(i => i.src).filter(Boolean)
-  );
-
-
-  const iconLinks = await page.$$eval("link[rel~='icon']", links =>
-    links.map(l => l.href).filter(Boolean)
-  );
-
-
-  const bgInline = await page.$$eval("*", els =>
-    els
-      .map(el => {
-        const bg = el.style?.backgroundImage || "";
-        const match = bg.match(/url\(["']?(.*?)["']?\)/);
-        return match ? match[1] : null;
-      })
-      .filter(Boolean)
-  );
-
-  
-  const bgComputed = await page.evaluate(() => {
-    const urls = new Set();
-    document.querySelectorAll("*").forEach(el => {
-      const style = getComputedStyle(el);
-      const bg = style.getPropertyValue("background-image");
-      const match = bg.match(/url\(["']?(.*?)["']?\)/);
-      if (match) urls.add(match[1]);
-    });
-    return Array.from(urls);
-  });
-
-
-  const allLinks = [
-    ...imgLinks,
-    ...iconLinks,
-    ...bgInline,
-    ...bgComputed
-  ]
-    .map(link => {
-      if (link.startsWith("//")) return "https:" + link;
-      if (link.startsWith("/")) return websiteURL + link;
-      return link;
-    })
-    .filter(link => link.startsWith("http"));
-
-  console.log(`🖼️ Found ${allLinks.length} images`);
-
-  let index = 1;
-  for (const link of allLinks) {
-    await downloadImage(link, folder, index++);
-  }
-
-  await browser.close();
-})();
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
