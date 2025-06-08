@@ -1,19 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Image Downloader</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
-    input, button { width: 100%; padding: 10px; margin: 8px 0; }
-    .result { margin-top: 20px; }
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 500px;
+      margin: auto;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+    }
+    .result {
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
   <h2>🌐 Website Image Downloader</h2>
   <form id="downloadForm">
     <input type="text" id="url" placeholder="Enter website URL" required />
-    <input type="text" id="folder" placeholder="Enter folder name (e.g., cats)" />
     <button type="submit">Download Images</button>
   </form>
 
@@ -23,24 +33,23 @@
     const form = document.getElementById("downloadForm");
     const result = document.getElementById("result");
 
-    form.addEventListener("submit", async e => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      result.innerHTML = "⏳ Downloading images...";
-      
+      result.textContent = "⏳ Downloading images...";
+
       const url = document.getElementById("url").value;
-      const folder = document.getElementById("folder").value;
 
       const res = await fetch("/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, folder })
+        body: JSON.stringify({ url }),
       });
 
       const data = await res.json();
-      result.innerHTML = data.message;
+      result.textContent = data.message;
 
-      if (data.viewLink) {
-        result.innerHTML += `<br><a href="${data.viewLink}" target="_blank">📂 View Downloaded Images</a>`;
+      if (data.zipLink) {
+        result.innerHTML += `<br><a href="${data.zipLink}" download>📥 Download ZIP of Images</a>`;
       }
     });
   </script>
