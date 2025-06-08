@@ -10,13 +10,15 @@
       max-width: 500px;
       margin: auto;
     }
-    input, button {
+    input,
+    button {
       width: 100%;
       padding: 10px;
       margin: 8px 0;
     }
     .result {
       margin-top: 20px;
+      white-space: pre-wrap;
     }
   </style>
 </head>
@@ -39,17 +41,22 @@
 
       const url = document.getElementById("url").value;
 
-      const res = await fetch("/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
+      try {
+        const res = await fetch("/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
 
-      const data = await res.json();
-      result.textContent = data.message;
+        const data = await res.json();
+        result.textContent = data.message;
 
-      if (data.zipLink) {
-        result.innerHTML += `<br><a href="${data.zipLink}" download>📥 Download ZIP of Images</a>`;
+        if (data.zipLink) {
+          result.innerHTML += `<br><a href="${data.zipLink}" download>📥 Download ZIP of Images</a>`;
+        }
+      } catch (err) {
+        result.textContent = "❌ Error occurred. Check console.";
+        console.error(err);
       }
     });
   </script>
