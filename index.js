@@ -6,16 +6,20 @@ const path = require("path");
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'templates')));
+app.use(express.static(path.join(__dirname, "templates")));
 
 app.get("/", (req, res) => {
-  const filePath = path.join(__dirname, 'templates', 'index.html');
+  const filePath = path.join(__dirname, "templates", "index.html");
   res.sendFile(filePath);
 });
 
 app.post("/download", async (req, res) => {
   const websiteURL = req.body.url;
-  const folder = path.join(__dirname, "img");
+  const folder = req.body.folder;
+
+  if (!websiteURL || !folder) {
+    return res.json({ message: "❌ Website URL and folder path are required." });
+  }
 
   try {
     await fs.ensureDir(folder);
@@ -51,12 +55,7 @@ app.post("/download", async (req, res) => {
       return Array.from(urls);
     });
 
-    const allLinks = [
-      ...imgLinks,
-      ...iconLinks,
-      ...bgInline,
-      ...bgComputed
-    ]
+    const allLinks = [...imgLinks, ...iconLinks, ...bgInline, ...bgComputed]
       .map(link => {
         if (link.startsWith("//")) return "https:" + link;
         if (link.startsWith("/")) return websiteURL + link;
@@ -108,4 +107,4 @@ const downloadImage = async (url, folder, index) => {
 };
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+app.listen(port, () => console.log(`🚀 Server running at http://localhost:${port}`));
