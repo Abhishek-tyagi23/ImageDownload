@@ -8,8 +8,8 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "templates")));
 
-// Serve downloaded images
-app.use("/downloads", express.static(path.join(__dirname, "downloads")));
+// Serve images from /tmp directory on Render
+app.use("/downloads", express.static("/tmp"));
 
 app.get("/", (req, res) => {
   const filePath = path.join(__dirname, "templates", "index.html");
@@ -24,13 +24,13 @@ app.post("/download", async (req, res) => {
     return res.json({ message: "❌ Website URL is required." });
   }
 
-  const downloadPath = path.join(__dirname, "downloads", folder);
+  const downloadPath = path.join("/tmp", folder); // Render-friendly temp dir
   await fs.ensureDir(downloadPath);
 
   try {
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox'] // Required for Render
     });
 
     const page = await browser.newPage();
