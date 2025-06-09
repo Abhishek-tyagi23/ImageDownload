@@ -2,95 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Image Downloader</title>
+  <title>Image Scraper</title>
   <style>
     body {
-      font-family: sans-serif;
-      padding: 20px;
-      max-width: 800px;
-      margin: auto;
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      background: #f7f7f7;
     }
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin: 8px 0;
+    h1 {
+      margin-bottom: 20px;
+    }
+    form {
+      margin-bottom: 30px;
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
       font-size: 16px;
     }
-    #result {
-      margin-top: 20px;
+    button {
+      padding: 8px 16px;
+      font-size: 16px;
+      background-color: #2d89ef;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-left: 10px;
     }
-    .gallery {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 12px;
-      margin-top: 20px;
-    }
-    .gallery-item {
-      position: relative;
-      overflow: hidden;
-      border-radius: 8px;
-      background: #f0f0f0;
-    }
-    .gallery-item img {
-      width: 100%;
-      height: auto;
-      display: block;
-      transition: transform 0.3s ease;
-    }
-    .gallery-item:hover img {
-      transform: scale(1.05);
+    button:hover {
+      background-color: #1b5fad;
     }
   </style>
 </head>
 <body>
-  <h2>🌐 Website Image Downloader</h2>
-  <form id="downloadForm">
-    <input type="text" id="url" placeholder="Enter website URL" required />
-    <button type="submit">Download Images</button>
+  <h1>Enter Website URL to Fetch Images</h1>
+  <form action="/fetch-images" method="POST">
+    <input type="text" name="url" placeholder="https://example.com" required />
+    <button type="submit">Fetch Images</button>
   </form>
-
-  <div id="result"></div>
-  <div class="gallery" id="gallery"></div>
-
-  <script>
-    const form = document.getElementById("downloadForm");
-    const resultDiv = document.getElementById("result");
-    const gallery = document.getElementById("gallery");
-
-    form.addEventListener("submit", async e => {
-      e.preventDefault();
-      resultDiv.textContent = "⏳ Downloading images...";
-      gallery.innerHTML = "";
-
-      const url = document.getElementById("url").value;
-      try {
-        const res = await fetch("/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-        const data = await res.json();
-        resultDiv.textContent = data.message;
-
-        if (data.zipLink) {
-          resultDiv.innerHTML += `<br><a href="${data.zipLink}" download>📥 Download ZIP of Images</a>`;
-        }
-        if (data.images?.length) {
-          data.images.forEach(file => {
-            const div = document.createElement('div');
-            div.className = 'gallery-item';
-            const img = document.createElement('img');
-            img.src = `/downloads/${file}`;
-            img.alt = file;
-            div.appendChild(img);
-            gallery.appendChild(div);
-          });
-        }
-      } catch (err) {
-        resultDiv.textContent = "❌ Error occurred. Check console.";
-        console.error(err);
-      }
-    });
-  </script>
 </body>
 </html>

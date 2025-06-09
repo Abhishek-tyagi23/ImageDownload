@@ -1,117 +1,94 @@
 const express = require("express");
-const puppeteer = require("puppeteer");
 const axios = require("axios");
-const fs = require("fs-extra");
+const cheerio = require("cheerio");
 const path = require("path");
-const archiver = require("archiver");
 
 const app = express();
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "templates")));
+const PORT = process.env.PORT || 3000;
 
-// Serve images from /tmp/downloads folder
-app.use("/downloads", express.static(path.join("/tmp", "downloads")));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "templates")));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "templates", "index.html"));
 });
 
-app.post("/download", async (req, res) => {
-  const websiteURL = req.body.url;
-  if (!websiteURL) {
-    return res.json({ message: "❌ Website URL is required." });
+app.post("/fetch-images", async (req, res) => {
+  const websiteUrl = req.body.url;
+
+  if (!websiteUrl) {
+    return res.send("Please enter a valid URL.");
   }
 
-  const downloadPath = path.join("/tmp", "downloads");
-  await fs.emptyDir(downloadPath);
-
   try {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    // Fetch website HTML
+    const response = await axios.get(websiteUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+      },
     });
-    const page = await browser.newPage();
-    await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 60000 });
 
-    const imgLinks = await page.$$eval("img", imgs =>
-      imgs.map(i => i.src).filter(Boolean)
-    );
-    await browser.close();
+    const html = response.data;
 
-    const fixedLinks = imgLinks
-      .map(l => {
-        try {
-          return new URL(l, websiteURL).href;
-        } catch {
-          return null;
+    // Parse HTML and extract image URLs using cheerio
+    const $ = cheerio.load(html);
+    let imgUrls = [];
+
+    $("img").each((i, img) => {
+      let src = $(img).attr("src");
+      if (src) {
+        // Convert relative URLs to absolute URLs
+        if (!src.startsWith("http")) {
+          try {
+            src = new URL(src, websiteUrl).href;
+          } catch {
+            // ignore invalid URLs
+          }
         }
-      })
-      .filter(l => l && l.startsWith("http"));
-
-    let index = 1;
-    for (const link of fixedLinks) {
-      await downloadImage(link, downloadPath, index++);
-    }
-
-    const zipPath = path.join("/tmp", "downloads.zip");
-    await createZip(downloadPath, zipPath);
-
-    const files = await fs.readdir(downloadPath);
-    res.json({
-      message: `✅ Downloaded ${files.length} images.`,
-      images: files,
-      zipLink: "/download-zip",
+        imgUrls.push(src);
+      }
     });
+
+    // Remove duplicates
+    imgUrls = [...new Set(imgUrls)];
+
+    // Render simple HTML showing images
+    let imagesHtml = imgUrls
+      .map(
+        (url) =>
+          `<div style="margin:10px;"><img src="${url}" style="max-width:200px; max-height:200px;" alt="image" /></div>`
+      )
+      .join("");
+
+    const resultPage = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Images from ${websiteUrl}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          .images-container { display: flex; flex-wrap: wrap; }
+          img { border: 1px solid #ccc; border-radius: 4px; }
+          a { display: inline-block; margin-bottom: 20px; }
+        </style>
+      </head>
+      <body>
+        <a href="/">&#8592; Back</a>
+        <h2>Images from ${websiteUrl}</h2>
+        <div class="images-container">
+          ${imagesHtml || "<p>No images found.</p>"}
+        </div>
+      </body>
+      </html>
+    `;
+
+    res.send(resultPage);
   } catch (err) {
-    console.error("Error in /download:", err);
-    res.json({ message: "❌ Failed to download images." });
+    console.error(err);
+    res.send("Failed to fetch images from the URL. Make sure URL is correct and publicly accessible.");
   }
 });
 
-app.get("/download-zip", (req, res) => {
-  const zipFile = path.join("/tmp", "downloads.zip");
-  if (fs.existsSync(zipFile)) {
-    res.download(zipFile, "images.zip");
-  } else {
-    res.status(404).send("No ZIP file found.");
-  }
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-async function downloadImage(url, folder, index) {
-  try {
-    const res = await axios.get(url, {
-      responseType: "stream",
-      headers: { "User-Agent": "Mozilla/5.0" },
-    });
-    const ct = res.headers["content-type"];
-    if (!ct || !ct.startsWith("image/")) return;
-
-    let ext = ct.split("/")[1].split(";")[0];
-    if (ext === "svg+xml") ext = "svg";
-
-    const file = path.join(folder, `image-${index}.${ext}`);
-    const writer = fs.createWriteStream(file);
-    res.data.pipe(writer);
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-  } catch (err) {
-    console.warn(`Failed to download ${url}: ${err.message}`);
-  }
-}
-
-function createZip(sourceDir, outPath) {
-  return new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(outPath);
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    output.on("close", resolve);
-    archive.on("error", reject);
-    archive.pipe(output);
-    archive.directory(sourceDir, false);
-    archive.finalize();
-  });
-}
-
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`🚀 Server running at http://localhost:${port}`));
