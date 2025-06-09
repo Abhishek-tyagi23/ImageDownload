@@ -9,11 +9,11 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "templates")));
 
-app.use("/downloads", express.static("/tmp/downloads"));
+// Ensure /downloads serves the downloaded images
+app.use("/downloads", express.static(path.join("/tmp", "downloads")));
 
 app.get("/", (req, res) => {
-  const filePath = path.join(__dirname, "templates", "index.html");
-  res.sendFile(filePath);
+  res.sendFile(path.join(__dirname, "templates", "index.html"));
 });
 
 app.post("/download", async (req, res) => {
@@ -23,50 +23,43 @@ app.post("/download", async (req, res) => {
   }
 
   const downloadPath = path.join("/tmp", "downloads");
-  await fs.emptyDir(downloadPath); // clear previous downloads
+  await fs.emptyDir(downloadPath);
 
   try {
-    console.log("Launching Puppeteer...");
     const browser = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
-
     const page = await browser.newPage();
-    console.log("Loading page:", websiteURL);
     await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 60000 });
 
-    // Get all img src links
-    const imgLinks = await page.$$eval("img", (imgs) =>
-      imgs.map((i) => i.src).filter(Boolean)
+    const imgLinks = await page.$$eval("img", imgs =>
+      imgs.map(i => i.src).filter(Boolean)
     );
-
     await browser.close();
 
-    // Fix URLs properly using new URL()
     const fixedLinks = imgLinks
-      .map((link) => {
+      .map(l => {
         try {
-          return new URL(link, websiteURL).href;
+          return new URL(l, websiteURL).href;
         } catch {
           return null;
         }
       })
-      .filter((link) => link && link.startsWith("http"));
-
-    console.log(`Found ${fixedLinks.length} images.`);
+      .filter(l => l && l.startsWith("http"));
 
     let index = 1;
     for (const link of fixedLinks) {
       await downloadImage(link, downloadPath, index++);
     }
 
-    // Create ZIP archive
     const zipPath = path.join("/tmp", "downloads.zip");
     await createZip(downloadPath, zipPath);
 
+    const files = await fs.readdir(downloadPath);
     res.json({
-      message: `✅ Downloaded ${index - 1} images.`,
+      message: `✅ Downloaded ${files.length} images.`,
+      images: files,
       zipLink: "/download-zip",
     });
   } catch (err) {
@@ -86,36 +79,25 @@ app.get("/download-zip", (req, res) => {
 
 async function downloadImage(url, folder, index) {
   try {
-    console.log(`Downloading image ${index}: ${url}`);
     const res = await axios.get(url, {
       responseType: "stream",
       headers: { "User-Agent": "Mozilla/5.0" },
     });
+    const ct = res.headers["content-type"];
+    if (!ct || !ct.startsWith("image/")) return;
 
-    const contentType = res.headers["content-type"];
-    if (!contentType || !contentType.startsWith("image/")) {
-      console.log(`Skipped (not image): ${url}`);
-      return;
-    }
-
-    let ext = contentType.split("/")[1].split(";")[0];
+    let ext = ct.split("/")[1].split(";")[0];
     if (ext === "svg+xml") ext = "svg";
 
-    const fileName = `image-${index}.${ext}`;
-    const filePath = path.join(folder, fileName);
-
-    const writer = fs.createWriteStream(filePath);
+    const file = path.join(folder, `image-${index}.${ext}`);
+    const writer = fs.createWriteStream(file);
     res.data.pipe(writer);
-
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
+    await new Promise((r, e) => {
+      writer.on("finish", r);
+      writer.on("error", e);
     });
-
-    console.log(`✅ Saved: ${fileName}`);
   } catch (err) {
-    console.log(`❌ Failed to download: ${url}`);
-    console.log(err.message);
+    console.warn(`Failed to download ${url}: ${err.message}`);
   }
 }
 
@@ -123,13 +105,8 @@ function createZip(sourceDir, outPath) {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outPath);
     const archive = archiver("zip", { zlib: { level: 9 } });
-
-    output.on("close", () => {
-      console.log(`ZIP created: ${outPath} (${archive.pointer()} bytes)`);
-      resolve();
-    });
-    archive.on("error", (err) => reject(err));
-
+    output.on("close", resolve);
+    archive.on("error", reject);
     archive.pipe(output);
     archive.directory(sourceDir, false);
     archive.finalize();

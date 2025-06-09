@@ -7,18 +7,38 @@
     body {
       font-family: sans-serif;
       padding: 20px;
-      max-width: 500px;
+      max-width: 800px;
       margin: auto;
     }
-    input,
-    button {
+    input, button {
       width: 100%;
       padding: 10px;
       margin: 8px 0;
+      font-size: 16px;
     }
-    .result {
+    #result {
       margin-top: 20px;
-      white-space: pre-wrap;
+    }
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .gallery-item {
+      position: relative;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #f0f0f0;
+    }
+    .gallery-item img {
+      width: 100%;
+      height: auto;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+    .gallery-item:hover img {
+      transform: scale(1.05);
     }
   </style>
 </head>
@@ -29,33 +49,45 @@
     <button type="submit">Download Images</button>
   </form>
 
-  <div class="result" id="result"></div>
+  <div id="result"></div>
+  <div class="gallery" id="gallery"></div>
 
   <script>
     const form = document.getElementById("downloadForm");
-    const result = document.getElementById("result");
+    const resultDiv = document.getElementById("result");
+    const gallery = document.getElementById("gallery");
 
-    form.addEventListener("submit", async (e) => {
+    form.addEventListener("submit", async e => {
       e.preventDefault();
-      result.textContent = "⏳ Downloading images...";
+      resultDiv.textContent = "⏳ Downloading images...";
+      gallery.innerHTML = "";
 
       const url = document.getElementById("url").value;
-
       try {
         const res = await fetch("/download", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url }),
         });
-
         const data = await res.json();
-        result.textContent = data.message;
+        resultDiv.textContent = data.message;
 
         if (data.zipLink) {
-          result.innerHTML += `<br><a href="${data.zipLink}" download>📥 Download ZIP of Images</a>`;
+          resultDiv.innerHTML += `<br><a href="${data.zipLink}" download>📥 Download ZIP of Images</a>`;
+        }
+        if (data.images?.length) {
+          data.images.forEach(file => {
+            const div = document.createElement('div');
+            div.className = 'gallery-item';
+            const img = document.createElement('img');
+            img.src = `/downloads/${file}`;
+            img.alt = file;
+            div.appendChild(img);
+            gallery.appendChild(div);
+          });
         }
       } catch (err) {
-        result.textContent = "❌ Error occurred. Check console.";
+        resultDiv.textContent = "❌ Error occurred. Check console.";
         console.error(err);
       }
     });
