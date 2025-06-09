@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "templates")));
 
-// Ensure /downloads serves the downloaded images
+// Serve images from /tmp/downloads folder
 app.use("/downloads", express.static(path.join("/tmp", "downloads")));
 
 app.get("/", (req, res) => {
@@ -92,9 +92,9 @@ async function downloadImage(url, folder, index) {
     const file = path.join(folder, `image-${index}.${ext}`);
     const writer = fs.createWriteStream(file);
     res.data.pipe(writer);
-    await new Promise((r, e) => {
-      writer.on("finish", r);
-      writer.on("error", e);
+    await new Promise((resolve, reject) => {
+      writer.on("finish", resolve);
+      writer.on("error", reject);
     });
   } catch (err) {
     console.warn(`Failed to download ${url}: ${err.message}`);
@@ -114,6 +114,4 @@ function createZip(sourceDir, outPath) {
 }
 
 const port = process.env.PORT || 3000;
-app.listen(port, () =>
-  console.log(`🚀 Server running at http://localhost:${port}`)
-);
+app.listen(port, () => console.log(`🚀 Server running at http://localhost:${port}`));
